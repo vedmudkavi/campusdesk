@@ -8,6 +8,13 @@
       "when": 1792038280688,
       "tag": "0000_fancy_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792046976654,
+      "tag": "0001_free_firedrake",
+      "breakpoints": true
     }
   ]
 }

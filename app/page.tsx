@@ -1,29 +1,665 @@
-'use client';
-import { useState, useEffect, useRef } from 'react';
-import { ArrowUpRight, Plus, LayoutDashboard, Ticket as TicketIcon, GraduationCap, Search, X, ArrowRight, CheckCircle2, Clock3, CircleDot, MapPin, SlidersHorizontal } from 'lucide-react';
-import { categories, statuses, priorities, type Ticket } from '../lib/tickets';
-export default function Home(){
- const [items,setItems]=useState<Ticket[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[auth,setAuth]=useState(false),[admin,setAdmin]=useState(false),[view,setView]=useState('Overview'),[query,setQuery]=useState(''),[status,setStatus]=useState('All statuses'),[category,setCategory]=useState('All categories'),[modal,setModal]=useState(false),[selected,setSelected]=useState<Ticket|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
- async function refresh(){try{const r=await fetch('/api/tickets');if(r.status===401){setAuth(true);return}if(!r.ok)throw Error('Could not load tickets. Please try again.');setItems(await r.json());setError('')}catch(e){setError((e as Error).message)}finally{setLoading(false)}}
- const dialogRef=useRef<HTMLElement>(null);
- useEffect(()=>{refresh()},[]);
- useEffect(()=>{
-  if(!modal)return;
-  const previous=document.activeElement as HTMLElement;
-  const el=dialogRef.current;
-  const focusable=()=>Array.from(el?.querySelectorAll<HTMLElement>('button:not([disabled]), input, select, textarea, a[href]')||[]);
-  focusable()[0]?.focus();
-  function key(e:KeyboardEvent){if(e.key==='Escape'){setModal(false);return}if(e.key==='Tab'){const nodes=focusable();const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}}
-  document.addEventListener('keydown',key);const old=document.body.style.overflow;document.body.style.overflow='hidden';
-  return()=>{document.removeEventListener('keydown',key);document.body.style.overflow=old;previous?.focus()};
- },[modal]);
- async function save(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const form=Object.fromEntries(new FormData(e.currentTarget));try{const r=await fetch('/api/tickets',{method:selected?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(selected?{...form,id:selected.id}:form)});const data=await r.json() as {error?:string};if(!r.ok)throw Error(data.error||'Unable to save ticket');setModal(false);setSelected(null);setNotice(selected?'Ticket updated':'Your issue has been reported');await refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
- const resolved=items.filter(i=>i.status==='Resolved').length,progress=items.filter(i=>i.status==='In progress').length,open=items.length-resolved-progress;
- const shown=items.filter(i=>(status==='All statuses'||i.status===status)&&(category==='All categories'||i.category===category)&&`${i.title} ${i.location} ${i.description}`.toLowerCase().includes(query.toLowerCase()));
- return <div className="shell"><aside><a className="brand" href="/"><span className="brand-icon"><GraduationCap size={23}/></span>campusdesk<span className="brand-dot">.</span></a><div className="workspace"><span className="campus-avatar">C</span><div><b>Your campus</b><small>Issue management workspace</small></div></div><p className="nav-label">WORKSPACE</p><nav>{[['Overview',LayoutDashboard],['All issues',TicketIcon]].map(([name,Icon]:any)=><button className={view===name?'active':''} key={name} onClick={()=>setView(name)}><Icon size={19}/>{name}{name==='All issues'&&<em>{items.length}</em>}</button>)}</nav><div className="sidebar-bottom"><span className="live-dot"/> A better campus starts here.<p>Small fixes. Meaningful change.</p></div><div className="profile"><div className="avatar">You</div><div><b>Your workspace</b><small>Personal portfolio demo</small></div></div></aside>
- <main><header><div>Workspace <span>/</span> <strong>{view}</strong></div><div className="mode"><span>Demo view</span><button className={!admin?'chosen':''} onClick={()=>setAdmin(false)}>Student</button><button className={admin?'chosen':''} onClick={()=>setAdmin(true)}>Admin</button></div></header><div className="content"><div className="heading"><div><div className="eyebrow">YOUR CAMPUS, CONNECTED</div><h1>{view==='Overview'?'A little care. A better campus.':'Every issue, in one place.'}</h1><p>Report what needs attention. Follow the progress. See the difference.</p></div><button className="primary" disabled={auth||loading} onClick={()=>{setSelected(null);setModal(true);setError('')}}><Plus size={18}/> Report an issue</button></div>
- {auth&&<div className="banner">Sign in to create your own saved workspace. <a href="/signin-with-chatgpt?return_to=/" target="_top">Sign in →</a></div>}{error&&<div className="error" role="alert">{error} {!modal&&<button onClick={refresh}>Retry</button>}</div>}{notice&&<div className="notice" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={16}/></button></div>}
- {view==='Overview'&&<><section className="stats">{[[items.length,'Total issues','Every report makes a difference',TicketIcon,'purple'],[open,'Open','Ready for a helping hand',CircleDot,'orange'],[progress,'In progress','Good things are in motion',Clock3,'blue'],[resolved,'Resolved','One step closer to a better campus',CheckCircle2,'green']].map(([n,label,desc,Icon,color]:any)=><div className="stat" key={label}><div><span>{label}</span><Icon className={color} size={20}/></div><strong>{loading?'—':n}</strong><small>{desc}</small></div>)}</section><section className="feature"><div><span className="eyebrow">MAKE YOUR VOICE COUNT</span><h2>Notice something?<br/>Let’s make it better.</h2><p>From a broken desk to a Wi-Fi dead zone,<br/>the first step to fixing it is reporting it.</p><button onClick={()=>{setSelected(null);setModal(true)}} disabled={auth||loading}>Create a report <ArrowRight size={17}/></button></div><div className="illustration" aria-hidden="true"><div className="orbit"/><div className="paper"><span className="paper-check">✓</span><b>Issue resolved</b><i/><i/><div className="paper-line"><span>Campus care</span><span>● Done</span></div></div><span className="spark one">✦</span><span className="spark two">✦</span><span className="float-tag">Better, together ↗</span></div><div className="progress-summary"><span>RESOLUTION RATE</span><strong>{items.length?Math.round(resolved/items.length*100):0}<small>%</small></strong><div className="bar"><i style={{width:`${items.length?resolved/items.length*100:0}%`}}/></div><p>{resolved} of {items.length} issues resolved</p></div></section></>}
- <section className="issues"><div className="section-heading"><h2>{view==='Overview'?'Campus issues':'All issues'} <span>{items.length}</span></h2><span className="saved-label"><span className="live-dot"/> Saved to your workspace</span></div><div className="filters"><div className="search"><Search size={17}/><input aria-label="Search issues" placeholder="Search issues, locations…" value={query} onChange={e=>setQuery(e.target.value)}/></div><SlidersHorizontal size={17}/><select aria-label="Filter by status" value={status} onChange={e=>setStatus(e.target.value)}>{['All statuses',...statuses].map(x=><option key={x}>{x}</option>)}</select><select aria-label="Filter by category" value={category} onChange={e=>setCategory(e.target.value)}>{['All categories',...categories].map(x=><option key={x}>{x}</option>)}</select></div><div className="table-wrap"><table><thead><tr><th>ISSUE</th><th>CATEGORY</th><th>STATUS</th><th>PRIORITY</th><th>REPORTED</th><th/></tr></thead><tbody>{shown.map(i=><tr key={i.id} onClick={()=>{setSelected(i);setModal(true);setError('')}}><td><button className="issue-title" onClick={()=>{setSelected(i);setModal(true)}}>{i.title}</button><small><MapPin size={12}/>{i.location}</small></td><td>{i.category}</td><td><span className={'pill '+i.status.replaceAll(' ','-').toLowerCase()}>● {i.status}</span></td><td><span className={'priority '+i.priority.toLowerCase()}>▥</span> {i.priority}</td><td>{new Date(i.created).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</td><td><ArrowUpRight size={17}/></td></tr>)}</tbody></table></div>{!shown.length&&<div className="empty"><TicketIcon size={30}/><h3>{loading?'Loading your workspace…':items.length?'No matching issues':'Your next campus improvement starts here'}</h3><p>{items.length?'Try another search or filter.':'Report your first issue to start tracking real progress.'}</p></div>}</section><footer>Built for the everyday things that make campus life better.<span>CampusDesk · Portfolio edition</span></footer><p className="demo-note">Demo workspace: student and admin views share your own tickets. This switch demonstrates the workflow; it is not a college permission system.</p></div></main>
- {modal&&<div className="overlay"><section ref={dialogRef} className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="close" aria-label="Close dialog" onClick={()=>setModal(false)}><X/></button><span className="eyebrow">CAMPUS CARE</span><h2 id="dialog-title">{selected?'Issue details':'What needs attention?'}</h2>{error&&<p className="error" role="alert">{error}</p>}{selected?<><h3>{selected.title}</h3><p className="description">{selected.description}</p><div className="detail-grid"><span>Location<b>{selected.location}</b></span><span>Category<b>{selected.category}</b></span><span>Priority<b>{selected.priority}</b></span><span>Assigned to<b>{selected.assignee}</b></span></div>{admin?<form onSubmit={save}><label>Status<select name="status" defaultValue={selected.status}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label><label>Assign to<input name="assignee" defaultValue={selected.assignee} maxLength={80} placeholder="e.g. Facilities team"/></label><button disabled={busy} className="primary">{busy?'Saving…':'Save changes'}</button></form>:<div className="banner">Status: {selected.status}. Switch to the admin demo to update this issue.</div>}</>:<form onSubmit={save}><label>Issue title<input autoFocus required name="title" minLength={5} maxLength={120} placeholder="e.g. Wi-Fi unavailable in the library"/></label><div className="form-row"><label>Category<select name="category">{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>Priority<select name="priority" defaultValue="Medium">{priorities.map(x=><option key={x}>{x}</option>)}</select></label></div><label>Location<input name="location" required minLength={2} maxLength={100} placeholder="Building, floor or room"/></label><label>What’s happening?<textarea name="description" required minLength={10} maxLength={2000} rows={4} placeholder="Include details that will help the team understand the issue."/></label><button className="primary" disabled={busy}>{busy?'Submitting…':'Submit issue'}<ArrowRight size={17}/></button></form>}</section></div>}</div>
+"use client";
+import { useState, useEffect, useRef } from "react";
+import {
+  ArrowUpRight,
+  Plus,
+  LayoutDashboard,
+  Ticket as TicketIcon,
+  GraduationCap,
+  Search,
+  X,
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  CircleDot,
+  MapPin,
+  SlidersHorizontal,
+} from "lucide-react";
+import { categories, statuses, priorities, type Ticket } from "../lib/tickets";
+import { IssueActivity } from "../components/issue-activity";
+import { IssueBoard } from "../components/issue-board";
+export default function Home() {
+  const [layout, setLayout] = useState<"list" | "board">("list");
+  const [sort, setSort] = useState("Newest first");
+  const [items, setItems] = useState<Ticket[]>([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [auth, setAuth] = useState(false),
+    [admin, setAdmin] = useState(false),
+    [view, setView] = useState("Overview"),
+    [query, setQuery] = useState(""),
+    [status, setStatus] = useState("All statuses"),
+    [category, setCategory] = useState("All categories"),
+    [modal, setModal] = useState(false),
+    [selected, setSelected] = useState<Ticket | null>(null),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState("");
+  async function refresh() {
+    try {
+      const r = await fetch("/api/tickets");
+      if (r.status === 401) {
+        setAuth(true);
+        return;
+      }
+      if (!r.ok) throw Error("Could not load tickets. Please try again.");
+      setItems(await r.json());
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  const dialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    refresh();
+  }, []);
+  useEffect(() => {
+    if (!modal) return;
+    const previous = document.activeElement as HTMLElement;
+    const el = dialogRef.current;
+    const focusable = () =>
+      Array.from(
+        el?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), input, select, textarea, a[href]",
+        ) || [],
+      );
+    focusable()[0]?.focus();
+    function key(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setModal(false);
+        return;
+      }
+      if (e.key === "Tab") {
+        const nodes = focusable();
+        const first = nodes[0],
+          last = nodes[nodes.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", key);
+    const old = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", key);
+      document.body.style.overflow = old;
+      previous?.focus();
+    };
+  }, [modal]);
+  async function save(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const form = Object.fromEntries(new FormData(e.currentTarget));
+    try {
+      const r = await fetch("/api/tickets", {
+        method: selected ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selected ? { ...form, id: selected.id } : form),
+      });
+      const data = (await r.json()) as { error?: string };
+      if (!r.ok) throw Error(data.error || "Unable to save ticket");
+      setModal(false);
+      setSelected(null);
+      setNotice(selected ? "Ticket updated" : "Your issue has been reported");
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const resolved = items.filter((i) => i.status === "Resolved").length,
+    progress = items.filter((i) => i.status === "In progress").length,
+    open = items.length - resolved - progress;
+  const shown = items
+    .filter(
+      (i) =>
+        (status === "All statuses" || i.status === status) &&
+        (category === "All categories" || i.category === category) &&
+        `${i.title} ${i.location} ${i.description}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+    )
+    .sort((a, b) =>
+      sort === "Priority first"
+        ? priorities.indexOf(b.priority) - priorities.indexOf(a.priority) ||
+          b.created - a.created
+        : sort === "Oldest first"
+          ? a.created - b.created
+          : b.created - a.created,
+    );
+  return (
+    <div className="shell">
+      <aside>
+        <a className="brand" href="/">
+          <span className="brand-icon">
+            <GraduationCap size={23} />
+          </span>
+          campusdesk<span className="brand-dot">.</span>
+        </a>
+        <div className="workspace">
+          <span className="campus-avatar">C</span>
+          <div>
+            <b>Your campus</b>
+            <small>Issue management workspace</small>
+          </div>
+        </div>
+        <p className="nav-label">WORKSPACE</p>
+        <nav>
+          {[
+            ["Overview", LayoutDashboard],
+            ["All issues", TicketIcon],
+          ].map(([name, Icon]: any) => (
+            <button
+              className={view === name ? "active" : ""}
+              key={name}
+              onClick={() => setView(name)}
+            >
+              <Icon size={19} />
+              {name}
+              {name === "All issues" && <em>{items.length}</em>}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <span className="live-dot" /> A better campus starts here.
+          <p>Small fixes. Meaningful change.</p>
+        </div>
+        <div className="profile">
+          <div className="avatar">You</div>
+          <div>
+            <b>Your workspace</b>
+            <small>Personal portfolio demo</small>
+          </div>
+        </div>
+      </aside>
+      <main>
+        <header>
+          <div>
+            Workspace <span>/</span> <strong>{view}</strong>
+          </div>
+          <div className="mode">
+            <span>Demo view</span>
+            <button
+              className={!admin ? "chosen" : ""}
+              onClick={() => setAdmin(false)}
+            >
+              Student
+            </button>
+            <button
+              className={admin ? "chosen" : ""}
+              onClick={() => setAdmin(true)}
+            >
+              Admin
+            </button>
+          </div>
+        </header>
+        <div className="content">
+          <div className="heading">
+            <div>
+              <div className="eyebrow">YOUR CAMPUS, CONNECTED</div>
+              <h1>
+                {view === "Overview"
+                  ? "A little care. A better campus."
+                  : "Every issue, in one place."}
+              </h1>
+              <p>
+                Report what needs attention. Follow the progress. See the
+                difference.
+              </p>
+            </div>
+            <button
+              className="primary"
+              disabled={auth || loading}
+              onClick={() => {
+                setSelected(null);
+                setModal(true);
+                setError("");
+              }}
+            >
+              <Plus size={18} /> Report an issue
+            </button>
+          </div>
+          {auth && (
+            <div className="banner">
+              Sign in to create your own saved workspace.{" "}
+              <a href="/signin-with-chatgpt?return_to=/" target="_top">
+                Sign in →
+              </a>
+            </div>
+          )}
+          {error && (
+            <div className="error" role="alert">
+              {error} {!modal && <button onClick={refresh}>Retry</button>}
+            </div>
+          )}
+          {notice && (
+            <div className="notice" role="status">
+              {notice}
+              <button
+                aria-label="Dismiss notification"
+                onClick={() => setNotice("")}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {view === "Overview" && (
+            <>
+              <section className="stats">
+                {[
+                  [
+                    items.length,
+                    "Total issues",
+                    "Every report makes a difference",
+                    TicketIcon,
+                    "purple",
+                  ],
+                  [
+                    open,
+                    "Open",
+                    "Ready for a helping hand",
+                    CircleDot,
+                    "orange",
+                  ],
+                  [
+                    progress,
+                    "In progress",
+                    "Good things are in motion",
+                    Clock3,
+                    "blue",
+                  ],
+                  [
+                    resolved,
+                    "Resolved",
+                    "One step closer to a better campus",
+                    CheckCircle2,
+                    "green",
+                  ],
+                ].map(([n, label, desc, Icon, color]: any) => (
+                  <div className="stat" key={label}>
+                    <div>
+                      <span>{label}</span>
+                      <Icon className={color} size={20} />
+                    </div>
+                    <strong>{loading ? "—" : n}</strong>
+                    <small>{desc}</small>
+                  </div>
+                ))}
+              </section>
+              <section className="feature">
+                <div>
+                  <span className="eyebrow">MAKE YOUR VOICE COUNT</span>
+                  <h2>
+                    Notice something?
+                    <br />
+                    Let’s make it better.
+                  </h2>
+                  <p>
+                    From a broken desk to a Wi-Fi dead zone,
+                    <br />
+                    the first step to fixing it is reporting it.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelected(null);
+                      setModal(true);
+                    }}
+                    disabled={auth || loading}
+                  >
+                    Create a report <ArrowRight size={17} />
+                  </button>
+                </div>
+                <div className="illustration" aria-hidden="true">
+                  <div className="orbit" />
+                  <div className="paper">
+                    <span className="paper-check">✓</span>
+                    <b>Issue resolved</b>
+                    <i />
+                    <i />
+                    <div className="paper-line">
+                      <span>Campus care</span>
+                      <span>● Done</span>
+                    </div>
+                  </div>
+                  <span className="spark one">✦</span>
+                  <span className="spark two">✦</span>
+                  <span className="float-tag">Better, together ↗</span>
+                </div>
+                <div className="progress-summary">
+                  <span>RESOLUTION RATE</span>
+                  <strong>
+                    {items.length
+                      ? Math.round((resolved / items.length) * 100)
+                      : 0}
+                    <small>%</small>
+                  </strong>
+                  <div className="bar">
+                    <i
+                      style={{
+                        width: `${items.length ? (resolved / items.length) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <p>
+                    {resolved} of {items.length} issues resolved
+                  </p>
+                </div>
+              </section>
+            </>
+          )}
+          <section className="issues">
+            <div className="section-heading">
+              <h2>
+                {view === "Overview" ? "Campus issues" : "All issues"}{" "}
+                <span>{items.length}</span>
+              </h2>
+              <div className="view-switch" aria-label="Issue view">
+                <button
+                  aria-pressed={layout === "list"}
+                  onClick={() => setLayout("list")}
+                >
+                  List
+                </button>
+                <button
+                  aria-pressed={layout === "board"}
+                  onClick={() => setLayout("board")}
+                >
+                  Board
+                </button>
+              </div>
+            </div>
+            <div className="filters">
+              <div className="search">
+                <Search size={17} />
+                <input
+                  aria-label="Search issues"
+                  placeholder="Search issues, locations…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+              <SlidersHorizontal size={17} />
+              <select
+                aria-label="Filter by status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                {["All statuses", ...statuses].map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Filter by category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                {["All categories", ...categories].map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Sort issues"
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+              >
+                {["Newest first", "Oldest first", "Priority first"].map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </div>
+            {layout === "board" ? (
+              <IssueBoard
+                tickets={shown}
+                onSelect={(ticket) => {
+                  setSelected(ticket);
+                  setModal(true);
+                  setError("");
+                }}
+              />
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ISSUE</th>
+                      <th>CATEGORY</th>
+                      <th>STATUS</th>
+                      <th>PRIORITY</th>
+                      <th>REPORTED</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((i) => (
+                      <tr
+                        key={i.id}
+                        onClick={() => {
+                          setSelected(i);
+                          setModal(true);
+                          setError("");
+                        }}
+                      >
+                        <td>
+                          <button
+                            className="issue-title"
+                            onClick={() => {
+                              setSelected(i);
+                              setModal(true);
+                            }}
+                          >
+                            {i.title}
+                          </button>
+                          <small>
+                            <MapPin size={12} />
+                            {i.location}
+                          </small>
+                        </td>
+                        <td>{i.category}</td>
+                        <td>
+                          <span
+                            className={
+                              "pill " +
+                              i.status.replaceAll(" ", "-").toLowerCase()
+                            }
+                          >
+                            ● {i.status}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={"priority " + i.priority.toLowerCase()}
+                          >
+                            ▥
+                          </span>{" "}
+                          {i.priority}
+                        </td>
+                        <td>
+                          {new Date(i.created).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </td>
+                        <td>
+                          <ArrowUpRight size={17} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!shown.length && layout === "list" && (
+              <div className="empty">
+                <TicketIcon size={30} />
+                <h3>
+                  {loading
+                    ? "Loading your workspace…"
+                    : items.length
+                      ? "No matching issues"
+                      : "Your next campus improvement starts here"}
+                </h3>
+                <p>
+                  {items.length
+                    ? "Try another search or filter."
+                    : "Report your first issue to start tracking real progress."}
+                </p>
+              </div>
+            )}
+          </section>
+          <footer>
+            Built for the everyday things that make campus life better.
+            <span>CampusDesk · Portfolio edition</span>
+          </footer>
+          <p className="demo-note">
+            Demo workspace: student and admin views share your own tickets. This
+            switch demonstrates the workflow; it is not a college permission
+            system.
+          </p>
+        </div>
+      </main>
+      {modal && (
+        <div className="overlay">
+          <section
+            ref={dialogRef}
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dialog-title"
+          >
+            <button
+              className="close"
+              aria-label="Close dialog"
+              onClick={() => setModal(false)}
+            >
+              <X />
+            </button>
+            <span className="eyebrow">CAMPUS CARE</span>
+            <h2 id="dialog-title">
+              {selected ? "Issue details" : "What needs attention?"}
+            </h2>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            {selected ? (
+              <>
+                <h3>{selected.title}</h3>
+                <p className="description">{selected.description}</p>
+                <div className="detail-grid">
+                  <span>
+                    Location<b>{selected.location}</b>
+                  </span>
+                  <span>
+                    Category<b>{selected.category}</b>
+                  </span>
+                  <span>
+                    Priority<b>{selected.priority}</b>
+                  </span>
+                  <span>
+                    Assigned to<b>{selected.assignee}</b>
+                  </span>
+                </div>
+                {admin ? (
+                  <form onSubmit={save}>
+                    <label>
+                      Status
+                      <select name="status" defaultValue={selected.status}>
+                        {statuses.map((x) => (
+                          <option key={x}>{x}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Assign to
+                      <input
+                        name="assignee"
+                        defaultValue={selected.assignee}
+                        maxLength={80}
+                        placeholder="e.g. Facilities team"
+                      />
+                    </label>
+                    <button disabled={busy} className="primary">
+                      {busy ? "Saving…" : "Save changes"}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="banner">
+                    Status: {selected.status}. Switch to the admin demo to
+                    update this issue.
+                  </div>
+                )}
+                <IssueActivity key={selected.id} ticketId={selected.id} />
+              </>
+            ) : (
+              <form onSubmit={save}>
+                <label>
+                  Issue title
+                  <input
+                    autoFocus
+                    required
+                    name="title"
+                    minLength={5}
+                    maxLength={120}
+                    placeholder="e.g. Wi-Fi unavailable in the library"
+                  />
+                </label>
+                <div className="form-row">
+                  <label>
+                    Category
+                    <select name="category">
+                      {categories.map((x) => (
+                        <option key={x}>{x}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Priority
+                    <select name="priority" defaultValue="Medium">
+                      {priorities.map((x) => (
+                        <option key={x}>{x}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  Location
+                  <input
+                    name="location"
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    placeholder="Building, floor or room"
+                  />
+                </label>
+                <label>
+                  What’s happening?
+                  <textarea
+                    name="description"
+                    required
+                    minLength={10}
+                    maxLength={2000}
+                    rows={4}
+                    placeholder="Include details that will help the team understand the issue."
+                  />
+                </label>
+                <button className="primary" disabled={busy}>
+                  {busy ? "Submitting…" : "Submit issue"}
+                  <ArrowRight size={17} />
+                </button>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }
