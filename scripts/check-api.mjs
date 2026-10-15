@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+const base='http://127.0.0.1:5173';
+const sign=await fetch(base+'/signin-with-chatgpt?return_to=/',{redirect:'manual'});
+const cookie=sign.headers.get('set-cookie')?.split(';')[0];
+assert.ok(cookie,'Local development sign-in cookie');
+const headers={cookie,origin:base,'Content-Type':'application/json'};
+assert.equal((await fetch(base+'/api/tickets')).status,401);
+assert.equal((await fetch(base+'/api/tickets',{method:'POST',headers,body:JSON.stringify({title:'x'})})).status,400);
+assert.equal((await fetch(base+'/api/tickets',{method:'POST',headers:{...headers,origin:'https://wrong.example'},body:'{}'})).status,403);
+const response=await fetch(base+'/api/tickets',{method:'POST',headers,body:JSON.stringify({title:'Library Wi-Fi unavailable',description:'The reading room network is not connecting.',category:'Technology',location:'Library, floor 2',priority:'High'})});
+assert.equal(response.status,201);const row=await response.json();
+const patch=await fetch(base+'/api/tickets',{method:'PATCH',headers,body:JSON.stringify({id:row.id,status:'Resolved',assignee:'IT team'})});assert.equal(patch.status,200);
+const list=await (await fetch(base+'/api/tickets',{headers})).json();assert.equal(list.find(x=>x.id===row.id).status,'Resolved');
+assert.equal((await fetch(base+'/api/tickets',{method:'PATCH',headers,body:JSON.stringify({id:crypto.randomUUID(),status:'Open',assignee:'IT'})})).status,404);
+console.log('PASS: sign-in, anonymous denial, validation, origin check, create, update, persistence, missing ticket.');
